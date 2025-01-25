@@ -6,6 +6,7 @@ import emailValidator from '../validators/emailValidator.js';
 import passwordValidator from '../validators/passwordValidator.js';
 import roleValidator from '../validators/roleValidator.js';
 import hashFunction from '../utils/hashFunction.js';
+import tokenGenerator from '../utils/tokenGenerator.js';
 
 const signUp = async (req, res) => {
   try {
@@ -89,6 +90,9 @@ const signUp = async (req, res) => {
 
     //* If this is the first user to sign up, set the role to 'admin'
     const role = users.length === 0 ? 'admin' : 'user';
+
+    //! Generate a token
+    const token = tokenGenerator({ email, role });
 
     //^ Create a new user
     const newUser = new userModel({
