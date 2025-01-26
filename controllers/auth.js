@@ -110,7 +110,6 @@ const signUp = async (req, res) => {
     //! Send the token in the response header
     res.cookie('token', token, {
       httpOnly: true,
-      sameSite: 'Strict',
       maxAge: 24 * 60 * 60 * 1000,
     });
 
