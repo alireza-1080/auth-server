@@ -89,10 +89,7 @@ const signUp = async (req, res) => {
     const users = await userModel.find();
 
     //* If this is the first user to sign up, set the role to 'admin'
-    const role = users.length === 0 ? 'admin' : 'user';
-
-    //! Generate a token
-    const token = tokenGenerator({ email, role });
+    const role = users.length === 0 ? 'ADMIN' : 'USER';
 
     //^ Create a new user
     const newUser = new userModel({
@@ -106,6 +103,16 @@ const signUp = async (req, res) => {
 
     //^ Save the new user to the database
     await newUser.save();
+
+    //! Generate a token
+    const token = tokenGenerator({ email, role });
+
+    //! Send the token in the response header
+    res.cookie('token', token, {
+      httpOnly: true,
+      sameSite: 'Strict',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
 
     //^ Send a response
     res.json({ message: 'User signed up successfully' });
