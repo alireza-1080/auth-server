@@ -7,6 +7,8 @@ import passwordValidator from '../validators/passwordValidator.js';
 import roleValidator from '../validators/roleValidator.js';
 import hashFunction from '../utils/hashFunction.js';
 import tokenGenerator from '../utils/tokenGenerator.js';
+import comparePasswords from '../utils/comparePasswords.js';
+import verifyToken from '../utils/verifyToken.js';
 
 const signUp = async (req, res) => {
   try {
@@ -105,12 +107,13 @@ const signUp = async (req, res) => {
     await newUser.save();
 
     //! Generate a token
-    const token = tokenGenerator({ email, role });
+    const token = tokenGenerator({ username });
 
     //! Send the token in the response header
     res.cookie('token', token, {
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
     });
 
     //^ Send a response
@@ -121,15 +124,97 @@ const signUp = async (req, res) => {
 };
 
 const logIn = async (req, res) => {
-  res.json('logIn');
+  try {
+    //? Get identifier and password from req.body
+    let { identifier, password } = req.body;
+
+    //* Convert identifier to lowercase
+    identifier = identifier.toLowerCase();
+
+    //! Check if identifier is provided
+    if (!identifier) {
+      throw new Error('Email or username is required');
+    }
+
+    //* Check if password is provided
+    if (!password) {
+      throw new Error('Password is required');
+    }
+
+    //^ Check if there is a user with the email or username
+    const user = await userModel.findOne({
+      $or: [{ email: identifier }, { username: identifier }],
+    });
+
+    //^ Throw an error if there is no user with the email or username
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    //? Compare the password
+    const isMatch = await comparePasswords(password, user.password);
+
+    //? Throw an error if the password is incorrect
+    if (!isMatch) {
+      throw new Error('Incorrect password');
+    }
+
+    //! Generate a token
+    const token = tokenGenerator({ username: user.username });
+
+    //! Send the token in the response header
+    res.cookie('token', token, {
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    //^ Send a response
+    res.json({ message: 'User logged in successfully' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 };
 
 const getMe = async (req, res) => {
-  res.json('getMe');
+  try{
+    //? Get username from req body
+    const { username } = req.body;
+    
+    //^ Find the user by username
+    const user = await userModel
+    .findOne({ username })
+    .select({ password: 0, __v: 0, createdAt: 0, updatedAt: 0 });
+    
+    //^ Send the user in the response
+    res.json(user);
+
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 };
 
 const logOut = async (req, res) => {
   res.json('logOut');
 };
 
-export { signUp, logIn, getMe, logOut };
+const verify = async (req, res) => {
+  try {
+    //? Get token from headers authorization
+    const token = req.headers.authorization.split(' ')[1];
+
+    //* If there is no token, throw an error
+    if (!token) {
+      throw new Error('Access denied');
+    }
+
+    //! Verify the token
+    const verifyTokenResult = await verifyToken(token);
+
+    res.json(verifyTokenResult);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+export { signUp, logIn, getMe, logOut, verify };
