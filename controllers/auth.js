@@ -177,25 +177,32 @@ const logIn = async (req, res) => {
 };
 
 const getMe = async (req, res) => {
-  try{
+  try {
     //? Get username from req body
     const { username } = req.body;
-    
+
     //^ Find the user by username
     const user = await userModel
-    .findOne({ username })
-    .select({ password: 0, __v: 0, createdAt: 0, updatedAt: 0 });
-    
+      .findOne({ username })
+      .select({ password: 0, __v: 0, createdAt: 0, updatedAt: 0 });
+
     //^ Send the user in the response
     res.json(user);
-
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
 
 const logOut = async (req, res) => {
-  res.json('logOut');
+  try {
+    //! Clear the token
+    res.clearCookie('token');
+
+    //^ Send a response
+    res.json({ message: 'User logged out successfully' });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
 };
 
 const verify = async (req, res) => {
