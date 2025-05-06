@@ -252,6 +252,13 @@ const login = async (req: Request<object, object, LoginRequestBody>, res: Respon
         // Check if the user exists
         const user = await prisma.user.findUnique({
             where: { email: validatedEmail },
+            select: {
+                id: true,
+                name: true,
+                username: true,
+                email: true,
+                password: true,
+            },
         });
 
         if (!user) throw new Error('User not found');
@@ -265,15 +272,22 @@ const login = async (req: Request<object, object, LoginRequestBody>, res: Respon
         const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
         // Update the user last login date
-        await prisma.user.update({
+        const updatedUser = await prisma.user.update({
             where: { email: validatedEmail },
             data: { lastLogin: new Date() },
+            select: {
+                id: true,
+                name: true,
+                username: true,
+                email: true,
+            },
         });
 
         res.status(200).json({
             status: 'success',
             message: 'Login successful',
             token,
+            user: updatedUser,
         });
 
         return;
