@@ -15,4 +15,9 @@ interface VerifyEmailRequestBody {
     verificationToken: string;
 }
 
-export type { SignupRequestBody, VerifyEmailRequestBody, VerificationTokenRequestBody };
+interface LoginRequestBody {
+    email: string;
+    password: string;
+}
+
+export type { SignupRequestBody, VerifyEmailRequestBody, VerificationTokenRequestBody, LoginRequestBody };

@@ -3,9 +3,20 @@ import { signupSchema } from '../validators/signup.validator.js';
 import { ZodError } from 'zod';
 import bcrypt from 'bcryptjs';
 import prisma from '../services/prisma.service.js';
-import { SignupRequestBody, VerifyEmailRequestBody, VerificationTokenRequestBody } from '../types/auth.validator.js';
+import {
+    SignupRequestBody,
+    VerifyEmailRequestBody,
+    VerificationTokenRequestBody,
+    LoginRequestBody,
+} from '../types/auth.validator.js';
 import { emailSchema } from '../validators/email.validator.js';
 import { generateVerificationToken } from '../utils/generateVerificationToken.js';
+import transporter from '../utils/nodeMailerTransporter.js';
+import mailVerificationTokenOptions from '../utils/mailVerificationTokenOptions.js';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const signup = async (req: Request<object, object, SignupRequestBody>, res: Response) => {
     try {
@@ -128,10 +139,12 @@ const verificationToken = async (req: Request<object, object, VerificationTokenR
             },
         });
 
+        // Send the verification token to the user's email
+        await transporter.sendMail(mailVerificationTokenOptions(validatedEmail, verificationToken));
+
         res.status(200).json({
             status: 'success',
             message: 'Verification token generated successfully',
-            verificationToken,
         });
 
         return;
@@ -224,4 +237,68 @@ const verifyEmail = async (req: Request<object, object, VerifyEmailRequestBody>,
     }
 };
 
-export { signup, verifyEmail, verificationToken };
+const login = async (req: Request<object, object, LoginRequestBody>, res: Response) => {
+    try {
+        // Get the body of the request
+        const { email, password } = req.body;
+
+        // Check if the required fields are present
+        if (!email) throw new Error('Email is required');
+        if (!password) throw new Error('Password is required');
+
+        // Validate the email
+        const validatedEmail = emailSchema.parse(email);
+
+        // Check if the user exists
+        const user = await prisma.user.findUnique({
+            where: { email: validatedEmail },
+        });
+
+        if (!user) throw new Error('User not found');
+
+        // Check if the password is correct
+        const isPasswordCorrect = await bcrypt.compare(password, user.password);
+
+        if (!isPasswordCorrect) throw new Error('Invalid password');
+
+        if (!process.env.JWT_SECRET) throw new Error('JWT secret is not configured');
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        // Update the user last login date
+        await prisma.user.update({
+            where: { email: validatedEmail },
+            data: { lastLogin: new Date() },
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Login successful',
+            token,
+        });
+
+        return;
+    } catch (error) {
+        if (error instanceof ZodError) {
+            res.status(400).json({
+                status: 'error',
+                message: 'Invalid email format',
+            });
+            return;
+        }
+
+        if (error instanceof Error) {
+            res.status(400).json({
+                status: 'error',
+                message: error.message,
+            });
+            return;
+        }
+
+        res.status(500).json({
+            status: 'error',
+            message: 'An unexpected error occurred',
+        });
+    }
+};
+
+export { signup, verifyEmail, verificationToken, login };
