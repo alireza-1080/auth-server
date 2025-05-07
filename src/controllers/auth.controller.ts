@@ -288,6 +288,7 @@ const login = async (req: Request<object, object, LoginRequestBody>, res: Respon
                 name: true,
                 username: true,
                 email: true,
+                isEmailVerified: true,
             },
         });
 
@@ -515,6 +516,7 @@ const isUserLoggedIn = async (req: Request<object, object, IsUserLoggedInRequest
                 name: true,
                 username: true,
                 email: true,
+                isEmailVerified: true,
             },
         });
 
