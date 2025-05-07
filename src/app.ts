@@ -1,13 +1,11 @@
 import express, { Response, ErrorRequestHandler } from 'express';
 import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import apiRoute from './routes/api.route.js';
 
 const app = express();
 
 app.use(cors());
-app.use(cookieParser());
 app.use(helmet());
 
 // Configure JSON parsing with error handling
