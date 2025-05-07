@@ -20,4 +20,28 @@ interface LoginRequestBody {
     password: string;
 }
 
-export type { SignupRequestBody, VerifyEmailRequestBody, VerificationTokenRequestBody, LoginRequestBody };
+interface ResetTokenRequestBody {
+    email: string;
+}
+
+interface IsResetTokenValidRequestBody {
+    email: string;
+    resetToken: string;
+}
+
+interface ResetPasswordRequestBody {
+    email: string;
+    resetToken: string;
+    password: string;
+    confirmPassword: string;
+}
+
+export type {
+    SignupRequestBody,
+    VerifyEmailRequestBody,
+    VerificationTokenRequestBody,
+    LoginRequestBody,
+    ResetTokenRequestBody,
+    IsResetTokenValidRequestBody,
+    ResetPasswordRequestBody,
+};

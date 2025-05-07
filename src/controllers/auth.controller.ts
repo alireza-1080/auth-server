@@ -8,6 +8,9 @@ import {
     VerifyEmailRequestBody,
     VerificationTokenRequestBody,
     LoginRequestBody,
+    ResetTokenRequestBody,
+    IsResetTokenValidRequestBody,
+    ResetPasswordRequestBody,
 } from '../types/auth.validator.js';
 import { emailSchema } from '../validators/email.validator.js';
 import { generateVerificationToken } from '../utils/generateVerificationToken.js';
@@ -15,6 +18,9 @@ import transporter from '../utils/nodeMailerTransporter.js';
 import mailVerificationTokenOptions from '../utils/mailVerificationTokenOptions.js';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import { generateResetToken } from '../utils/generateResetToken.js';
+import mailResetTokenOptions from '../utils/mailResetTokenOptions.js';
+import { passwordSchema } from '../validators/password.validator.js';
 
 dotenv.config();
 
@@ -135,7 +141,7 @@ const verificationToken = async (req: Request<object, object, VerificationTokenR
             where: { email: validatedEmail },
             data: {
                 verificationToken,
-                verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 60),
+                verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
             },
         });
 
@@ -315,4 +321,177 @@ const login = async (req: Request<object, object, LoginRequestBody>, res: Respon
     }
 };
 
-export { signup, verifyEmail, verificationToken, login };
+const resetToken = async (req: Request<object, object, ResetTokenRequestBody>, res: Response) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) throw new Error('Email is required');
+
+        const validatedEmail = emailSchema.parse(email);
+
+        const user = await prisma.user.findUnique({
+            where: { email: validatedEmail },
+        });
+
+        if (!user) throw new Error('User not found');
+
+        const resetToken = generateResetToken();
+
+        await prisma.user.update({
+            where: { email: validatedEmail },
+            data: {
+                resetPasswordToken: resetToken,
+                resetPasswordTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
+            },
+        });
+
+        await transporter.sendMail(mailResetTokenOptions(validatedEmail, resetToken));
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Reset token generated successfully',
+        });
+
+        return;
+    } catch (error) {
+        if (error instanceof ZodError) {
+            res.status(400).json({
+                status: 'error',
+                message: 'Invalid email format',
+            });
+            return;
+        }
+
+        if (error instanceof Error) {
+            res.status(400).json({
+                status: 'error',
+                message: error.message,
+            });
+            return;
+        }
+
+        res.status(500).json({
+            status: 'error',
+            message: 'An unexpected error occurred',
+        });
+    }
+};
+
+const isResetTokenValid = async (req: Request<object, object, IsResetTokenValidRequestBody>, res: Response) => {
+    try {
+        const { email, resetToken } = req.body;
+
+        if (!email) throw new Error('Email is required');
+        if (!resetToken) throw new Error('Reset token is required');
+
+        const validatedEmail = emailSchema.parse(email);
+
+        const user = await prisma.user.findUnique({
+            where: { email: validatedEmail },
+        });
+
+        if (!user) throw new Error('User not found');
+
+        if (user.resetPasswordToken !== resetToken) throw new Error('Invalid reset token');
+
+        if (!user.resetPasswordTokenExpiresAt) throw new Error('Reset token expired');
+        if (user.resetPasswordTokenExpiresAt < new Date()) throw new Error('Reset token expired');
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Reset token is valid',
+        });
+
+        return;
+    } catch (error) {
+        if (error instanceof ZodError) {
+            res.status(400).json({
+                status: 'error',
+                message: 'Invalid email format',
+            });
+            return;
+        }
+
+        if (error instanceof Error) {
+            res.status(400).json({
+                status: 'error',
+                message: error.message,
+            });
+            return;
+        }
+
+        res.status(500).json({
+            status: 'error',
+            message: 'An unexpected error occurred',
+        });
+    }
+};
+
+const resetPassword = async (req: Request<object, object, ResetPasswordRequestBody>, res: Response) => {
+    try {
+        const { email, resetToken, password, confirmPassword } = req.body;
+
+        if (!email) throw new Error('Email is required');
+        if (!resetToken) throw new Error('Reset token is required');
+        if (!password) throw new Error('Password is required');
+        if (!confirmPassword) throw new Error('Confirm password is required');
+
+        const validatedEmail = emailSchema.parse(email);
+
+        passwordSchema.parse(password);
+
+        if (password !== confirmPassword) throw new Error('Passwords do not match');
+
+        const user = await prisma.user.findUnique({
+            where: { email: validatedEmail },
+        });
+
+        if (!user) throw new Error('User not found');
+
+        if (user.resetPasswordToken !== resetToken) throw new Error('Invalid reset token');
+
+        if (!user.resetPasswordTokenExpiresAt) throw new Error('Reset token expired');
+        if (user.resetPasswordTokenExpiresAt < new Date()) throw new Error('Reset token expired');
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        await prisma.user.update({
+            where: { email: validatedEmail },
+            data: { password: hashedPassword, resetPasswordToken: null, resetPasswordTokenExpiresAt: null },
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Password reset successfully',
+        });
+
+        return;
+    } catch (error) {
+        if (error instanceof ZodError) {
+            res.status(400).json({
+                status: 'error',
+                message: 'Validation failed',
+                errors: error.errors.map((err) => ({
+                    field: err.path.join('.'),
+                    message: err.message,
+                })),
+            });
+            return;
+        }
+
+        if (error instanceof Error) {
+            res.status(400).json({
+                status: 'error',
+                message: error.message,
+            });
+            return;
+        }
+
+        res.status(500).json({
+            status: 'error',
+            message: 'An unexpected error occurred',
+        });
+    }
+};
+
+export { signup, verifyEmail, verificationToken, login, resetToken, isResetTokenValid, resetPassword };
