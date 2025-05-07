@@ -36,6 +36,10 @@ interface ResetPasswordRequestBody {
     confirmPassword: string;
 }
 
+interface IsUserLoggedInRequestBody {
+    token: string;
+}
+
 export type {
     SignupRequestBody,
     VerifyEmailRequestBody,
@@ -44,4 +48,5 @@ export type {
     ResetTokenRequestBody,
     IsResetTokenValidRequestBody,
     ResetPasswordRequestBody,
+    IsUserLoggedInRequestBody,
 };

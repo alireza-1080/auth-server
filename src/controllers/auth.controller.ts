@@ -11,6 +11,7 @@ import {
     ResetTokenRequestBody,
     IsResetTokenValidRequestBody,
     ResetPasswordRequestBody,
+    IsUserLoggedInRequestBody,
 } from '../types/auth.validator.js';
 import { emailSchema } from '../validators/email.validator.js';
 import { generateVerificationToken } from '../utils/generateVerificationToken.js';
@@ -21,6 +22,7 @@ import dotenv from 'dotenv';
 import { generateResetToken } from '../utils/generateResetToken.js';
 import mailResetTokenOptions from '../utils/mailResetTokenOptions.js';
 import { passwordSchema } from '../validators/password.validator.js';
+import { idSchema } from '../validators/id.validator.js';
 
 dotenv.config();
 
@@ -494,4 +496,75 @@ const resetPassword = async (req: Request<object, object, ResetPasswordRequestBo
     }
 };
 
-export { signup, verifyEmail, verificationToken, login, resetToken, isResetTokenValid, resetPassword };
+const isUserLoggedIn = async (req: Request<object, object, IsUserLoggedInRequestBody>, res: Response) => {
+    try {
+        const { token } = req.body;
+
+        if (!token) throw new Error('Token is required');
+
+        if (!process.env.JWT_SECRET) throw new Error('JWT secret is not configured');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET) as { id: string };
+        const { id } = decoded;
+
+        const validatedId = idSchema.parse(id);
+
+        const user = await prisma.user.findUnique({
+            where: { id: validatedId },
+            select: {
+                id: true,
+                name: true,
+                username: true,
+                email: true,
+            },
+        });
+
+        if (!user) throw new Error('User not found');
+
+        res.status(200).json({
+            status: 'success',
+            message: 'User is logged in',
+            user,
+        });
+
+        return;
+    } catch (error) {
+        if (error instanceof jwt.JsonWebTokenError) {
+            res.status(401).json({
+                status: 'error',
+                message: 'Invalid token',
+            });
+            return;
+        }
+
+        if (error instanceof jwt.TokenExpiredError) {
+            res.status(401).json({
+                status: 'error',
+                message: 'Token expired',
+            });
+            return;
+        }
+
+        if (error instanceof ZodError) {
+            res.status(400).json({
+                status: 'error',
+                message: 'Invalid user ID',
+            });
+            return;
+        }
+
+        if (error instanceof Error) {
+            res.status(400).json({
+                status: 'error',
+                message: error.message,
+            });
+            return;
+        }
+
+        res.status(500).json({
+            status: 'error',
+            message: 'An unexpected error occurred',
+        });
+    }
+};
+
+export { signup, verifyEmail, verificationToken, login, resetToken, isResetTokenValid, resetPassword, isUserLoggedIn };

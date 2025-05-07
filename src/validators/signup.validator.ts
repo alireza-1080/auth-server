@@ -6,11 +6,7 @@ const signupSchema = z
             .string()
             .min(2, 'Name must be at least 2 characters')
             .max(50, 'Name must be 50 characters or less')
-            .regex(
-                // eslint-disable-next-line
-                /^[a-zA-Z\s\-\'\.]*$/,
-                'Name can only contain letters, spaces, hyphens, apostrophes, or periods',
-            )
+            .regex(/^[a-zA-Z\s\-\'\.]*$/, 'Name can only contain letters, spaces, hyphens, apostrophes, or periods')
             .trim()
             .refine((val) => !/\s{2,}/.test(val), 'Name cannot contain multiple consecutive spaces')
             .transform((val) =>
