@@ -27,7 +27,6 @@ import { idSchema } from '../validators/id.validator.js';
 dotenv.config();
 
 const signup = async (req: Request<object, object, SignupRequestBody>, res: Response) => {
-    console.log('signup');
     try {
         // Get the body of the request
         const { name, username, email, password, confirmPassword } = req.body;
@@ -80,6 +79,20 @@ const signup = async (req: Request<object, object, SignupRequestBody>, res: Resp
             },
         });
 
+        const verificationToken = generateVerificationToken();
+
+        // Update the user with the verification token
+        await prisma.user.update({
+            where: { email: validatedUser.email },
+            data: {
+                verificationToken,
+                verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
+            },
+        });
+
+        // Send the verification token to the user's email
+        await transporter.sendMail(mailVerificationTokenOptions(validatedUser.email, verificationToken));
+
         res.status(201).json({
             status: 'success',
             message: 'User created successfully',
@@ -115,7 +128,7 @@ const signup = async (req: Request<object, object, SignupRequestBody>, res: Resp
     }
 };
 
-const verificationToken = async (req: Request<object, object, VerificationTokenRequestBody>, res: Response) => {
+const sendVerificationToken = async (req: Request<object, object, VerificationTokenRequestBody>, res: Response) => {
     try {
         // Get the body of the request
         const { email } = req.body;
@@ -570,4 +583,13 @@ const isUserLoggedIn = async (req: Request<object, object, IsUserLoggedInRequest
     }
 };
 
-export { signup, verifyEmail, verificationToken, login, resetToken, isResetTokenValid, resetPassword, isUserLoggedIn };
+export {
+    signup,
+    verifyEmail,
+    sendVerificationToken,
+    login,
+    resetToken,
+    isResetTokenValid,
+    resetPassword,
+    isUserLoggedIn,
+};

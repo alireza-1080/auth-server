@@ -1,8 +1,8 @@
 import express from 'express';
 import {
     signup,
+    sendVerificationToken,
     verifyEmail,
-    verificationToken,
     login,
     resetToken,
     isResetTokenValid,
@@ -14,7 +14,7 @@ const router = express.Router();
 
 router.post('/signup', signup);
 
-router.post('/verification-token', verificationToken);
+router.post('/send-verification-token', sendVerificationToken);
 
 router.post('/verify-email', verifyEmail);
 
