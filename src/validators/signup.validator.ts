@@ -25,10 +25,10 @@ const signupSchema = z
         password: z
             .string()
             .min(8, 'Password must be at least 8 characters')
-            .regex(/[a-z]/, 'Password 1 lowercase letter required')
-            .regex(/[A-Z]/, '1 uppercase letter required')
-            .regex(/[0-9]/, '1 digit required')
-            .regex(/[!@#$%^&*(),.?":{}|<>]/, '1 special character required'),
+            .regex(/[a-z]/, '1 lowercase letter required in password')
+            .regex(/[A-Z]/, '1 uppercase letter required in password')
+            .regex(/[0-9]/, '1 digit required in password')
+            .regex(/[!@#$%^&*(),.?":{}|<>]/, '1 special character required in password'),
         confirmPassword: z.string().min(1, 'Confirm password is required'),
     })
     .refine((data) => data.password === data.confirmPassword, {

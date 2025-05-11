@@ -27,6 +27,7 @@ import { idSchema } from '../validators/id.validator.js';
 dotenv.config();
 
 const signup = async (req: Request<object, object, SignupRequestBody>, res: Response) => {
+    console.log('signup');
     try {
         // Get the body of the request
         const { name, username, email, password, confirmPassword } = req.body;
