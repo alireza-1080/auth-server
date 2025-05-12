@@ -3,7 +3,7 @@ import {
     signup,
     sendVerificationToken,
     verifyEmail,
-    login,
+    signin,
     resetToken,
     isResetTokenValid,
     resetPassword,
@@ -18,7 +18,7 @@ router.post('/send-verification-token', sendVerificationToken);
 
 router.post('/verify-email', verifyEmail);
 
-router.post('/login', login);
+router.post('/signin', signin);
 
 router.post('/reset-token', resetToken);
 

@@ -51,7 +51,7 @@ const signup = async (req: Request<object, object, SignupRequestBody>, res: Resp
             },
         });
 
-        if (existingUser) throw new Error('Email already in use, please use a different email or login');
+        if (existingUser) throw new Error('Email already in use, please use a different email or sign in');
 
         const existingUsername = await prisma.user.findUnique({
             where: {
@@ -59,7 +59,7 @@ const signup = async (req: Request<object, object, SignupRequestBody>, res: Resp
             },
         });
 
-        if (existingUsername) throw new Error('Username already in use, please use a different username or login');
+        if (existingUsername) throw new Error('Username already in use, please use a different username or sign in');
 
         // Create the user
         const user = await prisma.user.create({
@@ -96,7 +96,6 @@ const signup = async (req: Request<object, object, SignupRequestBody>, res: Resp
         res.status(201).json({
             status: 'success',
             message: 'User created successfully',
-            user,
         });
 
         return;
@@ -259,7 +258,7 @@ const verifyEmail = async (req: Request<object, object, VerifyEmailRequestBody>,
     }
 };
 
-const login = async (req: Request<object, object, LoginRequestBody>, res: Response) => {
+const signin = async (req: Request<object, object, LoginRequestBody>, res: Response) => {
     try {
         // Get the body of the request
         const { email, password } = req.body;
@@ -280,6 +279,7 @@ const login = async (req: Request<object, object, LoginRequestBody>, res: Respon
                 username: true,
                 email: true,
                 password: true,
+                isEmailVerified: true,
             },
         });
 
@@ -289,6 +289,30 @@ const login = async (req: Request<object, object, LoginRequestBody>, res: Respon
         const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
         if (!isPasswordCorrect) throw new Error('Invalid password');
+
+        if (!user.isEmailVerified) {
+            const verificationToken = generateVerificationToken();
+
+            // Update the user with the verification token
+            await prisma.user.update({
+                where: { email: validatedEmail },
+                data: {
+                    verificationToken,
+                    verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
+                },
+            });
+
+            // Send the verification token to the user's email
+            await transporter.sendMail(mailVerificationTokenOptions(validatedEmail, verificationToken));
+
+            res.status(200).json({
+                status: 'success',
+                isEmailVerified: false,
+                message: 'Email not verified, verification token sent to email',
+            });
+
+            return;
+        }
 
         if (!process.env.JWT_SECRET) throw new Error('JWT secret is not configured');
         const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -309,8 +333,8 @@ const login = async (req: Request<object, object, LoginRequestBody>, res: Respon
         res.status(200).json({
             status: 'success',
             message: 'Login successful',
+            isEmailVerified: true,
             token,
-            user: updatedUser,
         });
 
         return;
@@ -587,7 +611,7 @@ export {
     signup,
     verifyEmail,
     sendVerificationToken,
-    login,
+    signin,
     resetToken,
     isResetTokenValid,
     resetPassword,
