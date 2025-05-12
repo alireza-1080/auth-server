@@ -195,7 +195,7 @@ const sendVerificationToken = async (req: Request<object, object, VerificationTo
 
 const verifyEmail = async (req: Request<object, object, VerifyEmailRequestBody>, res: Response) => {
     try {
-        const { email, verificationToken, type } = req.body;
+        const { email, verificationToken } = req.body;
 
         if (!email) throw new Error('Email is required');
         if (!verificationToken) throw new Error('Verification token is required');
@@ -227,14 +227,6 @@ const verifyEmail = async (req: Request<object, object, VerifyEmailRequestBody>,
                 verificationTokenExpiresAt: null,
             },
         });
-
-        if (type === 'signup') {
-            res.status(200).json({
-                status: 'success',
-                message: 'Email verified successfully',
-            });
-            return
-        }
 
         if (!process.env.JWT_SECRET) throw new Error('JWT secret is not configured');
         const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });

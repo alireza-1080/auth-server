@@ -13,7 +13,6 @@ interface VerificationTokenRequestBody {
 interface VerifyEmailRequestBody {
     email: string;
     verificationToken: string;
-    type: 'signup' | 'signin';
 }
 
 interface LoginRequestBody {
