@@ -8,6 +8,7 @@ import {
     isResetTokenValid,
     resetPassword,
     isUserLoggedIn,
+    deleteAccount,
 } from '../controllers/auth.controller.js';
 
 const router = express.Router();
@@ -27,5 +28,7 @@ router.post('/is-reset-token-valid', isResetTokenValid);
 router.post('/reset-password', resetPassword);
 
 router.post('/is-user-logged-in', isUserLoggedIn);
+
+router.delete('/delete-account', deleteAccount);
 
 export default router;

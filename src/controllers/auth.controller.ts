@@ -12,6 +12,7 @@ import {
     IsResetTokenValidRequestBody,
     ResetPasswordRequestBody,
     IsUserLoggedInRequestBody,
+    DeleteAccountRequestBody,
 } from '../types/auth.validator.js';
 import { emailSchema } from '../validators/email.validator.js';
 import { generateVerificationToken } from '../utils/generateVerificationToken.js';
@@ -611,6 +612,54 @@ const isUserLoggedIn = async (req: Request<object, object, IsUserLoggedInRequest
     }
 };
 
+const deleteAccount = async (req: Request<object, object, DeleteAccountRequestBody>, res: Response) => {
+    const { userId } = req.body;
+
+    try {
+        if (!userId) throw new Error('User ID is required');
+
+        const validatedUserId = idSchema.parse(userId);
+
+        const user = await prisma.user.findUnique({
+            where: { id: validatedUserId },
+        });
+
+        if (!user) throw new Error('User not found');
+
+        await prisma.user.delete({
+            where: { id: validatedUserId },
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Account deleted successfully',
+        });
+
+        return;
+    } catch (error) {
+        if (error instanceof ZodError) {
+            res.status(400).json({
+                status: 'error',
+                message: 'Invalid user ID',
+            });
+            return;
+        }
+
+        if (error instanceof Error) {
+            res.status(400).json({
+                status: 'error',
+                message: error.message,
+            });
+            return;
+        }
+
+        res.status(500).json({
+            status: 'error',
+            message: 'An unexpected error occurred',
+        });
+    }
+};
+
 export {
     signup,
     verifyEmail,
@@ -620,4 +669,5 @@ export {
     isResetTokenValid,
     resetPassword,
     isUserLoggedIn,
+    deleteAccount,
 };

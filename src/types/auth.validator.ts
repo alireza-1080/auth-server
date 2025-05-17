@@ -40,6 +40,10 @@ interface IsUserLoggedInRequestBody {
     token: string;
 }
 
+interface DeleteAccountRequestBody {
+    userId: string;
+}
+
 export type {
     SignupRequestBody,
     VerifyEmailRequestBody,
@@ -49,4 +53,5 @@ export type {
     IsResetTokenValidRequestBody,
     ResetPasswordRequestBody,
     IsUserLoggedInRequestBody,
+    DeleteAccountRequestBody,
 };
