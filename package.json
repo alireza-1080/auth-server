@@ -4,6 +4,7 @@
     "description": "A training project for authentication implementation including password recovery and email verification",
     "main": "index.js",
     "scripts": {
+        "prestart": "npx prisma generate",
         "dev": "nodemon --exec tsx src/server.ts",
         "build": "npx prisma generate && tsc",
         "start": "node dist/server.js",
