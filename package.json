@@ -5,7 +5,7 @@
     "main": "index.js",
     "scripts": {
         "dev": "nodemon --exec tsx src/server.ts",
-        "build": "npx prisma generate && tsc",
+        "build": "mkdir -p src/generated/prisma && npx prisma generate && tsc",
         "start": "node dist/server.js",
         "format": "prettier --write .",
         "lint": "eslint src"
