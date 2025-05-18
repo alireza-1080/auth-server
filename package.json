@@ -5,7 +5,7 @@
     "main": "index.js",
     "scripts": {
         "dev": "nodemon --exec tsx src/server.ts",
-        "build": "mkdir -p src/generated/prisma && npx prisma generate && tsc",
+        "build": "npx prisma generate && tsc",
         "start": "node dist/server.js",
         "format": "prettier --write .",
         "lint": "eslint src"
@@ -23,6 +23,7 @@
         "helmet": "^8.1.0",
         "jsonwebtoken": "^9.0.2",
         "nodemailer": "^7.0.2",
+        "prisma": "^6.7.0",
         "tsx": "^4.19.4",
         "zod": "^3.24.3"
     },
@@ -37,7 +38,6 @@
         "globals": "^16.0.0",
         "nodemon": "^3.1.10",
         "prettier": "^3.5.3",
-        "prisma": "^6.7.0",
         "typescript": "^5.8.3",
         "typescript-eslint": "^8.31.1"
     }
