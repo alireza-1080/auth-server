@@ -50,9 +50,18 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 
     if (err instanceof ZodError) {
         const firstError = err.errors[0];
+        const fieldName = firstError.path.join('.');
+        let message: string;
+
+        if (firstError.message === 'Required') {
+            message = `${fieldName} field is required`;
+        } else {
+            message = firstError.message;
+        }
+
         res.status(400).json({
             status: 'error',
-            message: `Validation failed: ${firstError.message} for field ${firstError.path.join('.')}`,
+            message,
         });
         return;
     }
