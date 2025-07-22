@@ -3,7 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import apiRoute from './routes/api.route.js';
 import { ZodError } from 'zod';
-import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+const { JsonWebTokenError, TokenExpiredError } = jwt;
 
 const app = express();
 
