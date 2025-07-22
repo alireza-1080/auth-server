@@ -33,6 +33,10 @@ if (!process.env.JWT_SECRET) {
 }
 
 const signup = asyncHandler(async (req: Request<object, object, SignupRequestBody>, res: Response) => {
+    if (!req.body) {
+        throw new Error('Request body is empty');
+    }
+
     const { name, username, email, password } = signupSchema.parse(req.body);
 
     const existingUser = await prisma.user.findFirst({
@@ -77,6 +81,9 @@ const signup = asyncHandler(async (req: Request<object, object, SignupRequestBod
 
 const sendVerificationToken = asyncHandler(
     async (req: Request<object, object, VerificationTokenRequestBody>, res: Response) => {
+        if (!req.body) {
+            throw new Error('Request body is empty');
+        }
         const { email } = req.body;
         emailSchema.parse(email);
 
@@ -110,6 +117,9 @@ const sendVerificationToken = asyncHandler(
 );
 
 const verifyEmail = asyncHandler(async (req: Request<object, object, VerifyEmailRequestBody>, res: Response) => {
+    if (!req.body) {
+        throw new Error('Request body is empty');
+    }
     const { email, verificationToken } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
@@ -149,6 +159,9 @@ const verifyEmail = asyncHandler(async (req: Request<object, object, VerifyEmail
 });
 
 const signin = asyncHandler(async (req: Request<object, object, LoginRequestBody>, res: Response) => {
+    if (!req.body) {
+        throw new Error('Request body is empty');
+    }
     const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
@@ -195,6 +208,9 @@ const signin = asyncHandler(async (req: Request<object, object, LoginRequestBody
 });
 
 const resetToken = asyncHandler(async (req: Request<object, object, ResetTokenRequestBody>, res: Response) => {
+    if (!req.body) {
+        throw new Error('Request body is empty');
+    }
     const { email } = req.body;
     emailSchema.parse(email);
 
@@ -224,6 +240,9 @@ const resetToken = asyncHandler(async (req: Request<object, object, ResetTokenRe
 
 const isResetTokenValid = asyncHandler(
     async (req: Request<object, object, IsResetTokenValidRequestBody>, res: Response) => {
+        if (!req.body) {
+            throw new Error('Request body is empty');
+        }
         const { email, resetToken } = req.body;
 
         const user = await prisma.user.findUnique({ where: { email } });
@@ -245,6 +264,9 @@ const isResetTokenValid = asyncHandler(
 );
 
 const resetPassword = asyncHandler(async (req: Request<object, object, ResetPasswordRequestBody>, res: Response) => {
+    if (!req.body) {
+        throw new Error('Request body is empty');
+    }
     const { email, resetToken, password, confirmPassword } = req.body;
 
     if (password !== confirmPassword) {
@@ -282,6 +304,9 @@ const resetPassword = asyncHandler(async (req: Request<object, object, ResetPass
 });
 
 const isUserLoggedIn = asyncHandler(async (req: Request<object, object, IsUserLoggedInRequestBody>, res: Response) => {
+    if (!req.body) {
+        throw new Error('Request body is empty');
+    }
     const { token } = req.body;
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
@@ -305,6 +330,9 @@ const isUserLoggedIn = asyncHandler(async (req: Request<object, object, IsUserLo
 });
 
 const deleteAccount = asyncHandler(async (req: Request<object, object, DeleteAccountRequestBody>, res: Response) => {
+    if (!req.body) {
+        throw new Error('Request body is empty');
+    }
     const { userId } = req.body;
     idSchema.parse(userId);
 
