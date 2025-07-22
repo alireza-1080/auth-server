@@ -54,7 +54,7 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
         let message: string;
 
         if (firstError.message === 'Required') {
-            message = `${fieldName} field is required`;
+            message = `${fieldName} is required`;
         } else {
             message = firstError.message;
         }
