@@ -2,6 +2,8 @@ import express, { Response, ErrorRequestHandler } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import apiRoute from './routes/api.route.js';
+import { ZodError } from 'zod';
+import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 
 const app = express();
 
@@ -44,6 +46,35 @@ app.use((_req: express.Request, res: express.Response) => {
 // General error handling middleware
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     console.error(err.stack);
+
+    if (err instanceof ZodError) {
+        res.status(400).json({
+            status: 'error',
+            message: 'Validation failed',
+            errors: err.errors.map((error) => ({
+                field: error.path.join('.'),
+                message: error.message,
+            })),
+        });
+        return;
+    }
+
+    if (err instanceof JsonWebTokenError) {
+        res.status(401).json({
+            status: 'error',
+            message: 'Invalid token',
+        });
+        return;
+    }
+
+    if (err instanceof TokenExpiredError) {
+        res.status(401).json({
+            status: 'error',
+            message: 'Token expired',
+        });
+        return;
+    }
+
     res.status(err.status || 500).json({
         status: 'error',
         message: err.message || 'Internal server error',
