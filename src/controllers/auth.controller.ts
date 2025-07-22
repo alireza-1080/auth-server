@@ -24,641 +24,303 @@ import { generateResetToken } from '../utils/generateResetToken.js';
 import mailResetTokenOptions from '../utils/mailResetTokenOptions.js';
 import { passwordSchema } from '../validators/password.validator.js';
 import { idSchema } from '../validators/id.validator.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
 dotenv.config();
 
-const signup = async (req: Request<object, object, SignupRequestBody>, res: Response) => {
-    try {
-        // Get the body of the request
-        const { name, username, email, password, confirmPassword } = req.body;
+if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is not defined');
+}
 
-        // Check if the required fields are present
-        if (!name) throw new Error('Name is required');
-        if (!username) throw new Error('Username is required');
-        if (!email) throw new Error('Email is required');
-        if (!password) throw new Error('Password is required');
-        if (!confirmPassword) throw new Error('Confirm password is required');
+const signup = asyncHandler(async (req: Request<object, object, SignupRequestBody>, res: Response) => {
+    const { name, username, email, password } = signupSchema.parse(req.body);
 
-        // Validate the user data
-        const validatedUser = signupSchema.parse(req.body);
+    const existingUser = await prisma.user.findFirst({
+        where: { OR: [{ email }, { username }] },
+    });
 
-        // Hash the password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Check if the user already exists
-        const existingUser = await prisma.user.findUnique({
-            where: {
-                email,
-            },
-        });
-
-        if (existingUser) throw new Error('Email already in use, please use a different email or sign in');
-
-        const existingUsername = await prisma.user.findUnique({
-            where: {
-                username,
-            },
-        });
-
-        if (existingUsername) throw new Error('Username already in use, please use a different username or sign in');
-
-        // Create the user
-        const user = await prisma.user.create({
-            data: {
-                name: validatedUser.name,
-                username: validatedUser.username,
-                email: validatedUser.email,
-                password: hashedPassword,
-            },
-            select: {
-                id: true,
-                name: true,
-                username: true,
-                email: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
-
-        const verificationToken = generateVerificationToken();
-
-        // Update the user with the verification token
-        await prisma.user.update({
-            where: { email: validatedUser.email },
-            data: {
-                verificationToken,
-                verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
-            },
-        });
-
-        // Send the verification token to the user's email
-        await transporter.sendMail(mailVerificationTokenOptions(validatedUser.email, verificationToken));
-
-        res.status(201).json({
-            status: 'success',
-            message: 'User created successfully',
-        });
-
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Validation failed',
-                errors: error.errors.map((err) => ({
-                    field: err.path.join('.'),
-                    message: err.message,
-                })),
-            });
-            return;
-        }
-
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+    if (existingUser) {
+        throw new Error('User with this email or username already exists');
     }
-};
 
-const sendVerificationToken = async (req: Request<object, object, VerificationTokenRequestBody>, res: Response) => {
-    try {
-        // Get the body of the request
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+        data: { name, username, email, password: hashedPassword },
+        select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    });
+
+    const verificationToken = generateVerificationToken();
+
+    await prisma.user.update({
+        where: { email },
+        data: {
+            verificationToken,
+            verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
+        },
+    });
+
+    await transporter.sendMail(mailVerificationTokenOptions(email, verificationToken));
+
+    res.status(201).json({
+        status: 'success',
+        message: 'User created successfully. Please check your email to verify your account.',
+    });
+});
+
+const sendVerificationToken = asyncHandler(
+    async (req: Request<object, object, VerificationTokenRequestBody>, res: Response) => {
         const { email } = req.body;
+        emailSchema.parse(email);
 
-        // Check if the email is present
-        if (!email) throw new Error('Email is required');
+        const user = await prisma.user.findUnique({ where: { email } });
 
-        // Validate the email
-        const validatedEmail = emailSchema.parse(email);
+        if (!user) {
+            throw new Error('User not found');
+        }
 
-        // Check if the user exists
-        const user = await prisma.user.findUnique({
-            where: { email: validatedEmail },
-        });
+        if (user.isEmailVerified) {
+            throw new Error('Email is already verified');
+        }
 
-        if (!user) throw new Error('User not found');
-
-        // Check if the user is already verified
-        if (user.isEmailVerified) throw new Error('User already verified');
-
-        // Generate the verification token
         const verificationToken = generateVerificationToken();
 
-        // Update the user with the verification token
         await prisma.user.update({
-            where: { email: validatedEmail },
+            where: { email },
             data: {
                 verificationToken,
                 verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
             },
         });
 
-        // Send the verification token to the user's email
-        await transporter.sendMail(mailVerificationTokenOptions(validatedEmail, verificationToken));
+        await transporter.sendMail(mailVerificationTokenOptions(email, verificationToken));
 
         res.status(200).json({
             status: 'success',
-            message: 'Verification token generated successfully',
+            message: 'Verification token sent successfully',
         });
+    },
+);
 
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Invalid email format',
-            });
-            return;
-        }
+const verifyEmail = asyncHandler(async (req: Request<object, object, VerifyEmailRequestBody>, res: Response) => {
+    const { email, verificationToken } = req.body;
 
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
+    const user = await prisma.user.findUnique({ where: { email } });
 
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+    if (!user) {
+        throw new Error('User not found');
     }
-};
 
-const verifyEmail = async (req: Request<object, object, VerifyEmailRequestBody>, res: Response) => {
-    try {
-        const { email, verificationToken } = req.body;
-
-        if (!email) throw new Error('Email is required');
-        if (!verificationToken) throw new Error('Verification token is required');
-
-        const validatedEmail = emailSchema.parse(email);
-
-        const user = await prisma.user.findUnique({
-            where: { email: validatedEmail },
-        });
-
-        if (!user) throw new Error('User not found');
-
-        // Check if the user is already verified
-        if (user.isEmailVerified) throw new Error('User already verified');
-
-        // Check if the verification token is valid
-        if (user.verificationToken !== verificationToken) throw new Error('Invalid verification token');
-
-        // Check if the verification token has expired
-        if (!user.verificationTokenExpiresAt) throw new Error('Verification token expired');
-
-        if (user.verificationTokenExpiresAt < new Date()) throw new Error('Verification token expired');
-
-        await prisma.user.update({
-            where: { email: validatedEmail },
-            data: {
-                isEmailVerified: true,
-                verificationToken: null,
-                verificationTokenExpiresAt: null,
-            },
-        });
-
-        if (!process.env.JWT_SECRET) throw new Error('JWT secret is not configured');
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Email verified successfully',
-            token,
-        });
-
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Invalid email format',
-            });
-            return;
-        }
-
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+    if (user.isEmailVerified) {
+        throw new Error('Email is already verified');
     }
-};
 
-const signin = async (req: Request<object, object, LoginRequestBody>, res: Response) => {
-    try {
-        // Get the body of the request
-        const { email, password } = req.body;
+    if (user.verificationToken !== verificationToken || !user.verificationTokenExpiresAt) {
+        throw new Error('Invalid verification token');
+    }
 
-        // Check if the required fields are present
-        if (!email) throw new Error('Email is required');
-        if (!password) throw new Error('Password is required');
+    if (user.verificationTokenExpiresAt < new Date()) {
+        throw new Error('Verification token has expired');
+    }
 
-        // Validate the email
-        const validatedEmail = emailSchema.parse(email);
-
-        // Check if the user exists
-        const user = await prisma.user.findUnique({
-            where: { email: validatedEmail },
-            select: {
-                id: true,
-                name: true,
-                username: true,
-                email: true,
-                password: true,
-                isEmailVerified: true,
-            },
-        });
-
-        if (!user) throw new Error('User not found');
-
-        // Check if the password is correct
-        const isPasswordCorrect = await bcrypt.compare(password, user.password);
-
-        if (!isPasswordCorrect) throw new Error('Invalid password');
-
-        if (!user.isEmailVerified) {
-            const verificationToken = generateVerificationToken();
-
-            // Update the user with the verification token
-            await prisma.user.update({
-                where: { email: validatedEmail },
-                data: {
-                    verificationToken,
-                    verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
-                },
-            });
-
-            // Send the verification token to the user's email
-            await transporter.sendMail(mailVerificationTokenOptions(validatedEmail, verificationToken));
-
-            res.status(200).json({
-                status: 'success',
-                isEmailVerified: false,
-                message: 'Email not verified, verification token sent to email',
-            });
-
-            return;
-        }
-
-        if (!process.env.JWT_SECRET) throw new Error('JWT secret is not configured');
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-        // Update the user last login date
-        const updatedUser = await prisma.user.update({
-            where: { email: validatedEmail },
-            data: { lastLogin: new Date() },
-            select: {
-                id: true,
-                name: true,
-                username: true,
-                email: true,
-                isEmailVerified: true,
-            },
-        });
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Login successful',
+    await prisma.user.update({
+        where: { email },
+        data: {
             isEmailVerified: true,
-            token,
-        });
+            verificationToken: null,
+            verificationTokenExpiresAt: null,
+        },
+    });
 
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Invalid email format',
-            });
-            return;
-        }
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
 
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
+    res.status(200).json({
+        status: 'success',
+        message: 'Email verified successfully',
+        token,
+    });
+});
 
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+const signin = asyncHandler(async (req: Request<object, object, LoginRequestBody>, res: Response) => {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+        throw new Error('Invalid email or password');
     }
-};
 
-const resetToken = async (req: Request<object, object, ResetTokenRequestBody>, res: Response) => {
-    try {
-        const { email } = req.body;
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
 
-        if (!email) throw new Error('Email is required');
+    if (!isPasswordCorrect) {
+        throw new Error('Invalid email or password');
+    }
 
-        const validatedEmail = emailSchema.parse(email);
-
-        const user = await prisma.user.findUnique({
-            where: { email: validatedEmail },
-        });
-
-        if (!user) throw new Error('User not found');
-
-        const resetToken = generateResetToken();
-
+    if (!user.isEmailVerified) {
+        const verificationToken = generateVerificationToken();
         await prisma.user.update({
-            where: { email: validatedEmail },
+            where: { email },
             data: {
-                resetPasswordToken: resetToken,
-                resetPasswordTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
+                verificationToken,
+                verificationTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
             },
         });
-
-        await transporter.sendMail(mailResetTokenOptions(validatedEmail, resetToken));
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Reset token generated successfully',
-        });
-
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Invalid email format',
-            });
-            return;
-        }
-
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
-
-        res.status(500).json({
+        await transporter.sendMail(mailVerificationTokenOptions(email, verificationToken));
+        res.status(403).json({
             status: 'error',
-            message: 'An unexpected error occurred',
+            message: 'Email not verified. A new verification token has been sent to your email.',
         });
+        return;
     }
-};
 
-const isResetTokenValid = async (req: Request<object, object, IsResetTokenValidRequestBody>, res: Response) => {
-    try {
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' });
+
+    await prisma.user.update({
+        where: { email },
+        data: { lastLogin: new Date() },
+    });
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Login successful',
+        token,
+    });
+});
+
+const resetToken = asyncHandler(async (req: Request<object, object, ResetTokenRequestBody>, res: Response) => {
+    const { email } = req.body;
+    emailSchema.parse(email);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    const resetToken = generateResetToken();
+
+    await prisma.user.update({
+        where: { email },
+        data: {
+            resetPasswordToken: resetToken,
+            resetPasswordTokenExpiresAt: new Date(Date.now() + 1000 * 60 * 10),
+        },
+    });
+
+    await transporter.sendMail(mailResetTokenOptions(email, resetToken));
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Password reset token sent successfully',
+    });
+});
+
+const isResetTokenValid = asyncHandler(
+    async (req: Request<object, object, IsResetTokenValidRequestBody>, res: Response) => {
         const { email, resetToken } = req.body;
 
-        if (!email) throw new Error('Email is required');
-        if (!resetToken) throw new Error('Reset token is required');
+        const user = await prisma.user.findUnique({ where: { email } });
 
-        const validatedEmail = emailSchema.parse(email);
-
-        const user = await prisma.user.findUnique({
-            where: { email: validatedEmail },
-        });
-
-        if (!user) throw new Error('User not found');
-
-        if (user.resetPasswordToken !== resetToken) throw new Error('Invalid reset token');
-
-        if (!user.resetPasswordTokenExpiresAt) throw new Error('Reset token expired');
-        if (user.resetPasswordTokenExpiresAt < new Date()) throw new Error('Reset token expired');
+        if (
+            !user ||
+            user.resetPasswordToken !== resetToken ||
+            !user.resetPasswordTokenExpiresAt ||
+            user.resetPasswordTokenExpiresAt < new Date()
+        ) {
+            throw new Error('Invalid or expired reset token');
+        }
 
         res.status(200).json({
             status: 'success',
             message: 'Reset token is valid',
         });
+    },
+);
 
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Invalid email format',
-            });
-            return;
-        }
+const resetPassword = asyncHandler(async (req: Request<object, object, ResetPasswordRequestBody>, res: Response) => {
+    const { email, resetToken, password, confirmPassword } = req.body;
 
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+    if (password !== confirmPassword) {
+        throw new Error('Passwords do not match');
     }
-};
 
-const resetPassword = async (req: Request<object, object, ResetPasswordRequestBody>, res: Response) => {
-    try {
-        const { email, resetToken, password, confirmPassword } = req.body;
+    passwordSchema.parse({ password });
 
-        if (!email) throw new Error('Email is required');
-        if (!resetToken) throw new Error('Reset token is required');
-        if (!password) throw new Error('Password is required');
-        if (!confirmPassword) throw new Error('Confirm password is required');
+    const user = await prisma.user.findUnique({ where: { email } });
 
-        const validatedEmail = emailSchema.parse(email);
-
-        passwordSchema.parse(password);
-
-        if (password !== confirmPassword) throw new Error('Passwords do not match');
-
-        const user = await prisma.user.findUnique({
-            where: { email: validatedEmail },
-        });
-
-        if (!user) throw new Error('User not found');
-
-        if (user.resetPasswordToken !== resetToken) throw new Error('Invalid reset token');
-
-        if (!user.resetPasswordTokenExpiresAt) throw new Error('Reset token expired');
-        if (user.resetPasswordTokenExpiresAt < new Date()) throw new Error('Reset token expired');
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        await prisma.user.update({
-            where: { email: validatedEmail },
-            data: { password: hashedPassword, resetPasswordToken: null, resetPasswordTokenExpiresAt: null },
-        });
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Password reset successfully',
-        });
-
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Validation failed',
-                errors: error.errors.map((err) => ({
-                    field: err.path.join('.'),
-                    message: err.message,
-                })),
-            });
-            return;
-        }
-
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+    if (
+        !user ||
+        user.resetPasswordToken !== resetToken ||
+        !user.resetPasswordTokenExpiresAt ||
+        user.resetPasswordTokenExpiresAt < new Date()
+    ) {
+        throw new Error('Invalid or expired reset token');
     }
-};
 
-const isUserLoggedIn = async (req: Request<object, object, IsUserLoggedInRequestBody>, res: Response) => {
-    try {
-        const { token } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-        if (!token) throw new Error('Token is required');
+    await prisma.user.update({
+        where: { email },
+        data: {
+            password: hashedPassword,
+            resetPasswordToken: null,
+            resetPasswordTokenExpiresAt: null,
+        },
+    });
 
-        if (!process.env.JWT_SECRET) throw new Error('JWT secret is not configured');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET) as { id: string };
-        const { id } = decoded;
+    res.status(200).json({
+        status: 'success',
+        message: 'Password has been reset successfully',
+    });
+});
 
-        const validatedId = idSchema.parse(id);
+const isUserLoggedIn = asyncHandler(async (req: Request<object, object, IsUserLoggedInRequestBody>, res: Response) => {
+    const { token } = req.body;
 
-        const user = await prisma.user.findUnique({
-            where: { id: validatedId },
-            select: {
-                id: true,
-                name: true,
-                username: true,
-                email: true,
-                isEmailVerified: true,
-            },
-        });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
+    const { id } = decoded;
+    idSchema.parse(id);
 
-        if (!user) throw new Error('User not found');
+    const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, name: true, username: true, email: true, isEmailVerified: true },
+    });
 
-        res.status(200).json({
-            status: 'success',
-            message: 'User is logged in',
-            user,
-        });
-
-        return;
-    } catch (error) {
-        if (error instanceof jwt.JsonWebTokenError) {
-            res.status(401).json({
-                status: 'error',
-                message: 'Invalid token',
-            });
-            return;
-        }
-
-        if (error instanceof jwt.TokenExpiredError) {
-            res.status(401).json({
-                status: 'error',
-                message: 'Token expired',
-            });
-            return;
-        }
-
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Invalid user ID',
-            });
-            return;
-        }
-
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+    if (!user) {
+        throw new Error('User not found');
     }
-};
 
-const deleteAccount = async (req: Request<object, object, DeleteAccountRequestBody>, res: Response) => {
+    res.status(200).json({
+        status: 'success',
+        message: 'User is logged in',
+        user,
+    });
+});
+
+const deleteAccount = asyncHandler(async (req: Request<object, object, DeleteAccountRequestBody>, res: Response) => {
     const { userId } = req.body;
+    idSchema.parse(userId);
 
-    try {
-        if (!userId) throw new Error('User ID is required');
+    const user = await prisma.user.findUnique({ where: { id: userId } });
 
-        const validatedUserId = idSchema.parse(userId);
-
-        const user = await prisma.user.findUnique({
-            where: { id: validatedUserId },
-        });
-
-        if (!user) throw new Error('User not found');
-
-        await prisma.user.delete({
-            where: { id: validatedUserId },
-        });
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Account deleted successfully',
-        });
-
-        return;
-    } catch (error) {
-        if (error instanceof ZodError) {
-            res.status(400).json({
-                status: 'error',
-                message: 'Invalid user ID',
-            });
-            return;
-        }
-
-        if (error instanceof Error) {
-            res.status(400).json({
-                status: 'error',
-                message: error.message,
-            });
-            return;
-        }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'An unexpected error occurred',
-        });
+    if (!user) {
+        throw new Error('User not found');
     }
-};
+
+    await prisma.user.delete({ where: { id: userId } });
+
+    res.status(200).json({
+        status: 'success',
+        message: 'Account deleted successfully',
+    });
+});
 
 export {
     signup,

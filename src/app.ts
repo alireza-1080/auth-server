@@ -11,17 +11,15 @@ app.use(helmet());
 // Configure JSON parsing with error handling
 app.use(
     express.json({
-        verify: (req, res: Response, buf) => {
+        verify: (req, res, buf) => {
             try {
                 JSON.parse(buf.toString());
-            } catch (error: unknown) {
-                if (error instanceof Error) {
-                    res.status(400).json({
-                        status: 'error',
-                        message: 'Invalid JSON',
-                    });
-                }
-                throw new Error('Invalid JSON');
+            } catch (e) {
+                (res as Response).status(400).json({
+                    status: 'error',
+                    message: 'Invalid JSON',
+                });
+                return;
             }
         },
     }),
@@ -44,7 +42,7 @@ app.use((_req: express.Request, res: express.Response) => {
 });
 
 // General error handling middleware
-const errorHandler: ErrorRequestHandler = (err, _req, res: Response) => {
+const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     console.error(err.stack);
     res.status(err.status || 500).json({
         status: 'error',
