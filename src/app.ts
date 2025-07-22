@@ -50,38 +50,9 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 
     if (err instanceof ZodError) {
         const firstError = err.errors[0];
-        const fieldName = firstError.path.join('.');
-        let message: string;
-
-        switch (firstError.code) {
-            case 'invalid_type':
-                message = `${fieldName} should be a ${firstError.expected}`;
-                break;
-            case 'too_small':
-                message = `${fieldName} must be at least ${firstError.minimum} characters long`;
-                break;
-            case 'too_big':
-                message = `${fieldName} must be at most ${firstError.maximum} characters long`;
-                break;
-            case 'invalid_string':
-                if (firstError.validation === 'email') {
-                    message = `Invalid email format for ${fieldName}`;
-                } else {
-                    message = `Invalid format for ${fieldName}`;
-                }
-                break;
-            default:
-                if (firstError.message === 'Required') {
-                    message = `${fieldName} is required`;
-                } else {
-                    message = firstError.message;
-                }
-                break;
-        }
-
         res.status(400).json({
             status: 'error',
-            message,
+            message: firstError.message,
         });
         return;
     }
