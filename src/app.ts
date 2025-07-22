@@ -49,13 +49,10 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     console.error(err.stack);
 
     if (err instanceof ZodError) {
+        const firstError = err.errors[0];
         res.status(400).json({
             status: 'error',
-            message: 'Validation failed',
-            errors: err.errors.map((error) => ({
-                field: error.path.join('.'),
-                message: error.message,
-            })),
+            message: `Validation failed: ${firstError.message} for field ${firstError.path.join('.')}`,
         });
         return;
     }
